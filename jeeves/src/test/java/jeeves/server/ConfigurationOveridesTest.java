@@ -1,11 +1,14 @@
 package jeeves.server;
 
 
+import jeeves.config.springutil.JeevesApplicationContext;
 import jeeves.utils.Xml;
 import org.apache.log4j.Level;
 import org.jdom.Element;
 import org.jdom.JDOMException;
 import org.junit.Test;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -95,13 +98,21 @@ public class ConfigurationOveridesTest {
     		reader.close();
     	}
     }
+    
+    @Test
+    public void updateSpringConfiguration() throws JDOMException, IOException {
+        Element config = Xml.loadFile(classLoader.getResource("test-spring-config.xml"));
+        JeevesApplicationContext applicationContext = new JeevesApplicationContext();
+        
+        ConfigurationOverrides.updateSpringConfiguration(config, applicationContext);
+    }
 
     @Test
     public void noUpdateConfig() throws JDOMException, IOException {
         Element config = Xml.loadFile(classLoader.getResource("test-config.xml"));
         Element unchanged = (Element) config.clone();
         ConfigurationOverrides.updateWithOverrides("config.xml", null, falseAppPath, config);
-        
+        new ClassPathXmlApplicationContext(new String[]{})
 
         assertLang("eng",config);
 

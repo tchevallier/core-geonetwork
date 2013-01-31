@@ -5,6 +5,7 @@ import java.io.File;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletContextEvent;
 
+import jeeves.server.ConfigurationOverrides;
 import jeeves.utils.Log;
 
 import org.geonetwork.config.MigrateConfiguration;

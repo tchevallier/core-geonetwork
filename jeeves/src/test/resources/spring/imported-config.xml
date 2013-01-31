@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ctx="http://www.springframework.org/schema/context"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <ctx:property-override location="test-spring-overrides.properties"/>
+    
+    <bean id="testBean2" class="jeeves.server.TestBean"/>
+    <bean id="astring" class="java.lang.String">
+    	<constructor-arg value="astring" />
+    </bean>
+</beans>

@@ -1,13 +1,22 @@
 package jeeves.server;
 
+import jeeves.config.springutil.JeevesApplicationContext;
 import jeeves.utils.Log;
 import jeeves.utils.XPath;
 import jeeves.utils.Xml;
+
+import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import org.apache.log4j.spi.LoggerRepository;
 import org.jdom.*;
 import org.jdom.filter.Filter;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.beans.factory.support.GenericBeanDefinition;
+import org.springframework.beans.factory.xml.XmlBeanDefinitionReader;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
 
 import javax.servlet.ServletContext;
 import java.io.*;
@@ -103,6 +112,17 @@ import java.util.regex.Pattern;
      	<update linePattern="(.*) Relations">$1 NewRelations</update>
      	<update linePattern="(.*)relatedId(.*)">$1${aparam}$2</update>
      </textFile>
+     <!-- configure the spring aspects of geonetwork -->
+     <spring>
+         <!-- import a complete spring xml file -->
+         <import file="./config-spring-overrides.xml"/>
+         <!-- declare a file as a spring properties override file: See http://static.springsource.org/spring/docs/3.0.x/api/org/springframework/beans/factory/config/PropertyOverrideConfigurer.html -->
+         <propertyOverrides file="./config-property-overrides.properties" />
+         <!-- set a property on one bean to reference another bean -->
+         <set bean="beanName" property="propertyName" ref="otherBeanName"/>
+         <!-- add a references to a bean to a property on another bean.  This assumes the property is a collection -->
+         <add bean="beanName" property="propertyName" ref="otherBeanName"/>
+      </spring>
  </overrides>
  * ]]></pre>
  * 
@@ -869,5 +889,43 @@ public class ConfigurationOverrides {
 			reader.close();
 		}
 	}
+
+    @SuppressWarnings("unchecked")
+    public static void updateSpringConfiguration(XmlBeanDefinitionReader reader, ConfigurableListableBeanFactory beanFactory, ResourceLoader loader, String overridesResource) throws IOException {
+        Element overrides = loader.loadXmlResource(overridesResource);
+        if (overrides == null) {
+            return;
+        }
+
+        List<Element> imports = new ArrayList<Element>();
+        List<Element> add = new ArrayList<Element>();
+        List<Element> set = new ArrayList<Element>();
+        for(Element e: (List<Element>) overrides.getChildren("spring")) {
+            imports.addAll(e.getChildren("import"));
+            add.addAll(e.getChildren("add"));
+            set.addAll(e.getChildren("set"));
+        }
+
+        for (Element element : imports) {
+            InputStream inputStream = loader.loadInputStream(element.getAttributeValue("file"));
+            try {
+                Resource inputSource = new InputStreamResource(inputStream);
+                reader.loadBeanDefinitions(inputSource);
+            } finally{
+                IOUtils.closeQuietly(inputStream);
+            }
+        }
+
+        beanFactory.registerSingleton("configurationOverridesPostProcessor",  new ConfigurationOverridesPostProcessor(add,set));
+    }
+
+    public static void importSpringConfigurations(XmlBeanDefinitionReader reader, ConfigurableListableBeanFactory beanFactory, ServletContext servletContext, String appPath) throws JDOMException, IOException {
+        String overridesResource = lookupOverrideParameter(servletContext, appPath);
+
+        ResourceLoader loader = new ServletResourceLoader(servletContext, appPath);
+        
+        updateSpringConfiguration(reader, beanFactory, loader, overridesResource);
+    }
+
 
 }
