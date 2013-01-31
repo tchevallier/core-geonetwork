@@ -17,8 +17,7 @@ import java.io.InputStreamReader;
 import java.net.URL;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class ConfigurationOveridesTest {
     final ClassLoader classLoader = getClass().getClassLoader();
@@ -101,10 +100,25 @@ public class ConfigurationOveridesTest {
     
     @Test
     public void updateSpringConfiguration() throws JDOMException, IOException {
-        Element config = Xml.loadFile(classLoader.getResource("test-spring-config.xml"));
         JeevesApplicationContext applicationContext = new JeevesApplicationContext();
+        applicationContext.setAppPath(appPath);
+        applicationContext.setConfigLocation("test-spring-config.xml");
+        System.setProperty("geonetwork."+ConfigurationOverrides.OVERRIDES_KEY, ",/WEB-INF/test-spring-config-overrides.xml");
+        applicationContext.refresh();
+
+        TestBean testBean = applicationContext.getBean("testBean", TestBean.class); 
+        TestBean testBean2 = applicationContext.getBean("testBean2", TestBean.class); 
+        TestBean testBean3 = applicationContext.getBean("testBean3", TestBean.class);
         
-        ConfigurationOverrides.updateSpringConfiguration(config, applicationContext);
+        assertNotNull(testBean);
+        assertNotNull(testBean2);
+        assertNotNull(testBean3);
+        
+        assertEquals("overriddenProp", testBean.getBasicProp());
+        assertEquals(testBean2, testBean.getSimpleRef());
+        assertTrue("testbean has a testbean added to one of its collections", testBean.getCollectionRef().contains(testBean3));
+        assertEquals("astring", testBean.getBasicProp2());
+        assertTrue("testBeans contains 'newString' in its collection of strings", testBean.getCollectionProp().contains("newString"));
     }
 
     @Test
@@ -112,7 +126,6 @@ public class ConfigurationOveridesTest {
         Element config = Xml.loadFile(classLoader.getResource("test-config.xml"));
         Element unchanged = (Element) config.clone();
         ConfigurationOverrides.updateWithOverrides("config.xml", null, falseAppPath, config);
-        new ClassPathXmlApplicationContext(new String[]{})
 
         assertLang("eng",config);
 

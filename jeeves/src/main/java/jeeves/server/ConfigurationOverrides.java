@@ -12,9 +12,11 @@ import org.apache.log4j.spi.LoggerRepository;
 import org.jdom.*;
 import org.jdom.filter.Filter;
 import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.GenericBeanDefinition;
 import org.springframework.beans.factory.xml.XmlBeanDefinitionReader;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 
@@ -474,7 +476,7 @@ public class ConfigurationOverrides {
         return elems;
     }
 
-    private static String updatePropertiesInText(Properties properties, String value) {
+    static String updatePropertiesInText(Properties properties, String value) {
         if (value == null) {
             return null;
         }
@@ -585,7 +587,16 @@ public class ConfigurationOverrides {
     }
 
     public static abstract class ResourceLoader {
-        protected abstract InputStream loadInputStream(String resource) throws IOException;
+        protected InputStream loadInputStream(String resource) throws IOException {
+            File file = resolveFile(resource);
+            if(file == null) {
+                return fallbackInputStream(resource);
+            } else {
+                return new FileInputStream(file);
+            }
+        }
+        protected abstract File resolveFile(String resource) throws IOException;
+        protected abstract InputStream fallbackInputStream(String resource) throws IOException;
         protected String resolveImportFileName(String importResource, String baseResource) {
             String resolved = resolveRelative(importResource, baseResource, File.separator);
             if(resolved.equals(importResource)) {
@@ -891,7 +902,7 @@ public class ConfigurationOverrides {
 	}
 
     @SuppressWarnings("unchecked")
-    public static void updateSpringConfiguration(XmlBeanDefinitionReader reader, ConfigurableListableBeanFactory beanFactory, ResourceLoader loader, String overridesResource) throws IOException {
+    public static void updateSpringConfiguration(XmlBeanDefinitionReader reader, ConfigurableBeanFactory beanFactory, ResourceLoader loader, String overridesResource) throws IOException {
         Element overrides = loader.loadXmlResource(overridesResource);
         if (overrides == null) {
             return;
@@ -906,20 +917,32 @@ public class ConfigurationOverrides {
             set.addAll(e.getChildren("set"));
         }
 
+        Properties properties = loadProperties(overrides);
+        
         for (Element element : imports) {
-            InputStream inputStream = loader.loadInputStream(element.getAttributeValue("file"));
-            try {
-                Resource inputSource = new InputStreamResource(inputStream);
+            String importFile = element.getAttributeValue("file");
+            importFile = updatePropertiesInText(properties, importFile);
+            
+            Log.info(Log.JEEVES, "ConfigurationOverrides: importing spring file into application context: "+importFile);
+            File file = loader.resolveFile(importFile);
+            if(file != null) {
+                Resource inputSource = new FileSystemResource(file);
                 reader.loadBeanDefinitions(inputSource);
-            } finally{
-                IOUtils.closeQuietly(inputStream);
+            } else {
+                InputStream inputStream = loader.loadInputStream(importFile);
+                try {
+                    Resource inputSource = new InputStreamResource(inputStream);
+                    reader.loadBeanDefinitions(inputSource);
+                } finally {
+                    IOUtils.closeQuietly(inputStream);
+                }
             }
         }
 
-        beanFactory.registerSingleton("configurationOverridesPostProcessor",  new ConfigurationOverridesPostProcessor(add,set));
+        beanFactory.registerSingleton("configurationOverridesPostProcessor",  new ConfigurationOverridesPostProcessor(add,set,properties));
     }
 
-    public static void importSpringConfigurations(XmlBeanDefinitionReader reader, ConfigurableListableBeanFactory beanFactory, ServletContext servletContext, String appPath) throws JDOMException, IOException {
+    public static void importSpringConfigurations(XmlBeanDefinitionReader reader, ConfigurableBeanFactory beanFactory, ServletContext servletContext, String appPath) throws JDOMException, IOException {
         String overridesResource = lookupOverrideParameter(servletContext, appPath);
 
         ResourceLoader loader = new ServletResourceLoader(servletContext, appPath);
